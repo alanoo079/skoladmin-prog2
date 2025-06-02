@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Jensen Admin v2</title>
+</head>
+<body>
+    <h1>Jensen Admin v2</h1>
+
+    <h2>Search after People</h2>
+    <input id="searchQuery" placeholder="Enter name or ID" oninput="showSuggestions()">
+    <ul id="suggestions" style="list-style:none; padding-left: 0; margin-top: 4px;"></ul>
+    <button onclick="searchPerson()">Search</button>
+
+    <div id="searchResult" style="margin-top: 20px;"></div>
+
+
+
+    <h2>Adda Student</h2>
+    <input id="sId" placeholder="ID">
+    <input id="sName" placeholder="Name">
+    <button onclick="addStudent()">Adda Student</button>
+
+    <h2>Adda Teacher</h2>
+    <input id="tId" placeholder="ID">
+    <input id="tName" placeholder="Name">
+    <button onclick="addTeacher()">Adda Teacher</button>
+
+
+    <h2>Skapa Kurs</h2>
+    <input id="cCode" placeholder="Course Code">
+    <input id="cName" placeholder="Course Name">
+    <input id="cTeacher" placeholder="Teacher ID">
+    <input id="cStudents" placeholder="Student IDs (comma-separated)">
+    <button onclick="addCourse()">Adda Kurs</button>
+
+    <h2>Assign Grade</h2>
+    <input id="gCode" placeholder="Course Code">
+    <input id="gStudent" placeholder="Student ID">
+    <select id="gLevel">
+        <option>A</option><option>B</option><option>C</option>
+        <option>D</option><option>E</option><option>F</option>
+    </select>
+    <button onclick="assignGrade()">Assign Grade</button>
+
+    <h2>All Data</h2>
+    <button onclick="getData()">Show All</button>
+    <pre id="output"></pre>
+
+<script>
+async function addStudent() {
+    const [firstName, lastName] = sName.value.trim().split(" ", 2); // splita namn i 2 delar bru
+    await fetch('/addStudent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id: parseInt(sId.value),
+            firstName: firstName || "",
+            lastName: lastName || ""
+        })
+    });
+}
+
+
+async function addTeacher() {
+    const [firstName, lastName] = tName.value.trim().split(" ", 2);
+    await fetch('/addTeacher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id: parseInt(tId.value),
+            firstName: firstName || "",
+            lastName: lastName || ""
+        })
+    });
+}
+
+
+async function searchPerson() {
+    const query = document.getElementById('searchQuery').value.trim();
+    const resultDiv = document.getElementById('searchResult');
+    resultDiv.innerHTML = "Searching...";
+
+    const res = await fetch(`/search?query=${encodeURIComponent(query)}`);
+    if (!res.ok) {
+        resultDiv.innerHTML = "No person found.";
+        return;
+    }
+
+    const data = await res.json();
+    resultDiv.innerHTML = `
+        <h3>Result</h3>
+        <p><strong>ID:</strong> ${data.id}</p>
+        <p><strong>Name:</strong> ${data.name}</p>
+        <p><strong>Type:</strong> ${data.type}</p>
+        <p><strong>Courses:</strong></p>
+        <ul>${data.courses.map(c => `<li>${c.courseCode}: ${c.name}</li>`).join("")}</ul>
+        ${data.type === "Student" ? `
+        <p><strong>Grades:</strong></p>
+        <ul>${data.grades.map(g => `<li>${g.courseCode}: ${g.level} (${new Date(g.date).toLocaleDateString()})</li>`).join("")}</ul>
+        ` : ""}
+    `;
+}
+
+
+async function showSuggestions() {
+    const query = document.getElementById('searchQuery').value.trim();
+    const suggestionBox = document.getElementById('suggestions');
+    suggestionBox.innerHTML = "";
+
+    if (query.length < 1) return;
+
+    const res = await fetch(`/searchSuggestions?query=${encodeURIComponent(query)}`);
+    if (!res.ok) return;
+
+    const suggestions = await res.json();
+
+    suggestions.forEach(person => {
+        const li = document.createElement('li');
+        li.textContent = `${person.name} (${person.type})`;
+        li.style.cursor = 'pointer';
+        li.style.padding = '4px';
+        li.onmouseover = () => li.style.background = '#eee';
+        li.onmouseout = () => li.style.background = 'transparent';
+        li.onclick = () => {
+            document.getElementById('searchQuery').value = person.name;
+            suggestionBox.innerHTML = "";
+            searchPerson();
+        };
+        suggestionBox.appendChild(li);
+    });
+}
+
+
+async function addCourse() {
+    await fetch('/addCourse', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            courseCode: cCode.value,
+            name: cName.value,
+            teacherId: parseInt(cTeacher.value),
+            studentIds: cStudents.value.split(',').map(x => parseInt(x.trim()))
+        })
+    });
+}
+
+async function assignGrade() {
+    await fetch('/assignGrade', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            courseCode: gCode.value,
+            studentId: parseInt(gStudent.value),
+            level: gLevel.value
+        })
+    });
+}
+
+async function getData() {
+    const [students, teachers, courses, grades] = await Promise.all([
+        fetch('/students').then(res => res.json()),
+        fetch('/teachers').then(res => res.json()),
+        fetch('/courses').then(res => res.json()),
+        fetch('/grades').then(res => res.json())
+    ]);
+
+    output.textContent = JSON.stringify({ students, teachers, courses, grades }, null, 2);
+}
+</script>
+</body>
+</html>
